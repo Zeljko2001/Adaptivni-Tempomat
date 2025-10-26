@@ -107,7 +107,7 @@ void send_message_COM2(const char* msg) {
 }
 
 // ------------------- HELPERS -------------------
-static void update_display(uint16_t value) {
+static void update_display(uint16_t value) {// azurira prikaz na 7segmentnom displeju
     uint16_t desired = tempomat_on ? desired_speed : 999;
     uint16_t current = current_speed;
 
@@ -115,7 +115,7 @@ static void update_display(uint16_t value) {
     if (current > 999) current = 999;
 
     // Zaključaj mutex
-    if (xSemaphoreTake(display_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {
+    if (xSemaphoreTake(display_mutex, pdMS_TO_TICKS(50)) == pdTRUE) {// ceka mutex do 50ms ako nije slobodan, vise od toga preskace
         // Podešena brzina na prva tri mesta
         display_digits[0] = desired / 100;
         display_digits[1] = (desired / 10) % 10;
@@ -129,16 +129,16 @@ static void update_display(uint16_t value) {
         display_digits[5] = (current / 10) % 10;
         display_digits[6] = current % 10;
 
-        xSemaphoreGive(display_mutex);
+		xSemaphoreGive(display_mutex);//vrati kontrilu mutexu kad zavrsi if
     }
 }
 
 // ------------------- TIMER CALLBACK (svake 3s) -------------------
 
 void vSpeedTimerCallback(TimerHandle_t xTimer) {
-    (void)xTimer;
+    (void)xTimer;//ovde vrti svake 3s
 
-    uint8_t led_status = 0;
+	uint8_t led_status = 0;// čitamo prvi stubac LED bara koji uekazuje stanje papučice gasa
     if (get_LED_BAR(0, &led_status) == 0) { // 0 = uspešno
         if ((led_status & 0x07) != 0) {
             if (tempomat_on) {
@@ -146,11 +146,11 @@ void vSpeedTimerCallback(TimerHandle_t xTimer) {
                 desired_speed = 999;
                 update_display(desired_speed);
                 printf("Tempomat resetovan zbog pritiska papucica (LED bar)\n");
-                send_message_COM2("Tempomat OFF.\n");
+                send_message_COM2("\nTempomat OFF.");
             }
         }
     }
-    uint8_t led_status_2 = 0;
+	uint8_t led_status_2 = 0;// čitamo drugi stubac LED bara koji ukazuje stanje koje iskljucuje tempomat
     if (get_LED_BAR(1, &led_status_2) == 0) { // 0 = uspešno
         if ((led_status_2 & 0x01) != 0) {
             if (tempomat_on) {
@@ -158,31 +158,30 @@ void vSpeedTimerCallback(TimerHandle_t xTimer) {
                 desired_speed = 999;
                 update_display(desired_speed);
                 printf("Tempomat resetovan\n");
-                send_message_COM2("Tempomat OFF.\n");
+                send_message_COM2("\nTempomat OFF.\n");
             }
         }
     }
     // Proveravamo uslove za alarm
     static uint16_t last_speed = 0;
     if (tempomat_on) {
-        uint16_t dist = latest_distance_cm;
-
+		uint16_t dist = latest_distance_cm;// čitamo poslednju izmerenu distancu s tim da je u mejnu deklarisano pocetno 1000 cm
         printf("[Timer] Distanca: %u cm, brzina: %u, željena: %u\n",
             dist, current_speed, desired_speed);
 
-        if (dist < 500 && current_speed < last_speed) {
+		if (dist < 500) {// ako je udaljenost manja od 500 cm 
             alarm_active = 1;  // uključi alarm
         }
         else {
             alarm_active = 0;  // isključi alarm
         }
 
-        last_speed = current_speed;
+		last_speed = current_speed;//trenautna brzina se pamti kao poslednja brzina
         if (dist < 500) {
             if (current_speed > 0) {
                 current_speed--;
                 update_display(current_speed);
-                send_message_COM2("Automobil je preblizu\n");
+				send_message_COM2("Automobil je preblizu\n");// šaljemo obavještenje na PC ili ti na com2
             }
         }
         else {
@@ -204,7 +203,7 @@ void vSpeedTimerCallback(TimerHandle_t xTimer) {
 // ------------------- TASKOVI -------------------
 
 // Task koji blinka treći stubac LED bara sa periodom 1000ms ako je alarm aktivan
-void Alarm_Task(void* pvParameters) {
+void Alarm_Task(void* pvParameters) {//blinka diode ako je alarm aktivan
     uint8_t led_state = 0;
     while (1) {
         if (alarm_active) {
@@ -215,7 +214,7 @@ void Alarm_Task(void* pvParameters) {
             set_LED_BAR(2, 0x00);  // ugasi sve diode trećeg stubca
             led_state = 0;
         }
-        vTaskDelay(pdMS_TO_TICKS(500)); // toggla na svakih 500ms => period blinka 1000ms
+        vTaskDelay(pdMS_TO_TICKS(500)); // delay toggla na svakih 500ms => period blinka 1000ms
     }
 }
 
@@ -224,7 +223,7 @@ void SerialReceive_Task(void* pvParameters) {
     int idx = 0;
     uint8_t cc;
 
-    memset(buffer, 0, sizeof(buffer));
+	memset(buffer, 0, sizeof(buffer));// inicijalizacija buffera za primanje komandi za tempomat na kanal 0
     idx = 0;
 
     while (1) {
@@ -255,7 +254,7 @@ void SerialReceive_Task(void* pvParameters) {
                             speed = speed * 10 + (buffer[i] - '0');
                         else break;
                     }
-                    if (speed >= 0 && speed <= 200) {
+                    if (speed >= 0 && speed <= 350) {
                         desired_speed = (uint8_t)speed;
                         tempomat_on = 1;
                         // ne postavljamo odmah current_speed na desired_speed, nego kroz timer se povećava
@@ -287,8 +286,8 @@ void SerialReceive_Task(void* pvParameters) {
         }
         else {
             // normalan znak (nije delimiter) -> dodaj u buffer ako ima mesta
-            if (idx < (int)sizeof(buffer) - 2) { // ostavimo mesto za terminator i eventualno
-                buffer[idx++] = (char)cc;
+            if (idx < (int)sizeof(buffer) - 2) { // ostavimo mesto za terminator i eventualno 
+                buffer[idx++] = (char)cc;//
                 buffer[idx] = '\0';
             }
             else {
@@ -308,7 +307,7 @@ void SerialReceive_Task(void* pvParameters) {
 }
 
 // SENSOR TASK (kanal 1) — prima vrednosti distance u cm svakih 200 ms
-void Sensor_Task(void* pvParameters) {
+void Sensor_Task(void* pvParameters) {// prima podatke sa senzora udaljenosti na kanalu 1, unit 1
     char buffer[32];
     int idx = 0;
     uint8_t cc;
@@ -381,7 +380,7 @@ void Sensor_Task(void* pvParameters) {
 void Processing_Task(void* pvParameters) {
     uint16_t dist_cm;
     while (1) {
-        if (xQueueReceive(Sensor_Queue, &dist_cm, portMAX_DELAY) == pdPASS) {
+		if (xQueueReceive(Sensor_Queue, &dist_cm, portMAX_DELAY) == pdPASS) {// čeka na nove distance iz senzora dok ne stisnes send text na unicom
             // update latest distance (može se koristiti u timer callback-u)
             latest_distance_cm = dist_cm;
         }
@@ -393,25 +392,25 @@ void Display_Task(void* pvParameters) {
     while (1) {
         for (int digit = 0; digit < 7; digit++) {
             select_7seg_digit(digit);
-            if (xSemaphoreTake(display_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {
+			if (xSemaphoreTake(display_mutex, pdMS_TO_TICKS(10)) == pdTRUE) {// čeka do 10ms na mutex ako nije slobodan, preskače
                 if (display_digits[digit] == 255) {
                     set_7seg_digit(0x00); // prazan segment
                 }
                 else {
                     set_7seg_digit(hexnum[display_digits[digit]]);
                 }
-                xSemaphoreGive(display_mutex);
+				xSemaphoreGive(display_mutex);// vrati kontrolu mutexu kad zavrsi if
             }
             else {
                 set_7seg_digit(0x00);
             }
-            vTaskDelay(pdMS_TO_TICKS(3)); // manji delay za fluidniji multiplexing
+            vTaskDelay(pdMS_TO_TICKS(3)); // manji delay za fluidniji multiplexing(za 3ms refresujeceo displej)
         }
     }
 }
 
 // OPTIONAL: Serial send task (neobavezno)
-void SerialSend_Task(void* pvParameters) {
+void SerialSend_Task(void* pvParameters) {// šalje "READY\n" na COM_CH_2 svakih 1s
     const char poruka[] = "READY\n";
     uint8_t i = 0;
     while (1) {
