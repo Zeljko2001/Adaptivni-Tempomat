@@ -1,4 +1,4 @@
-﻿// STANDARD INCLUDESS
+// STANDARD INCLUDESS
 #include <stdio.h>
 #include <stdint.h>
 #include <string.h>
@@ -39,7 +39,7 @@ static QueueHandle_t PC_Queue; // ako želiš da koristiš
 static TimerHandle_t speed_timer_handle = NULL;
 
 // HEX kodovi za 7-seg
-static const uint8_t hexnum[] = {0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F};
+static const uint8_t hexnum[] = { 0x3F, 0x06, 0x5B, 0x4F, 0x66, 0x6D, 0x7D, 0x07, 0x7F, 0x6F };
 
 // ------------------- DISPLAY VARS (protected by display_mutex) -------------------
 static uint8_t stotine = 0, desetice = 0, jedinice = 0;
@@ -64,12 +64,28 @@ static uint32_t prvProcessRXCInterrupt(void) {
     if (get_RXC_status(COM_CH_1)) xSemaphoreGiveFromISR(RXC_BinarySemaphore_1, &xHigherPTW);
     if (get_RXC_status(COM_CH_2)) xSemaphoreGiveFromISR(RXC_BinarySemaphore_2, &xHigherPTW);
     portYIELD_FROM_ISR(xHigherPTW);
+
+    if (get_RXC_status(0) != 0) {
+        if (xSemaphoreGiveFromISR(RXC_BinarySemaphore_0, &xHigherPTW) != pdPASS) {
+            printf("Error RXC_SEM0_GIVE\n");
+        }
+
+        if (xSemaphoreGiveFromISR(RXC_BinarySemaphore_1, &xHigherPTW) != pdPASS) {
+            printf("Error RXC_SEM0_GIVE\n");
+        }
+
+        if (xSemaphoreGiveFromISR(RXC_BinarySemaphore_2, &xHigherPTW) != pdPASS) {
+            printf("Error RXC_SEM0_GIVE\n");
+        }
+    }
     return 0;
 }
 
 static uint32_t prvProcessTBEInterrupt(void) {
     BaseType_t xHigherPTW = pdFALSE;
     xSemaphoreGiveFromISR(TBE_BinarySemaphore, &xHigherPTW);
+
+
     portYIELD_FROM_ISR(xHigherPTW);
     return 0;
 }
@@ -129,7 +145,7 @@ void vSpeedTimerCallback(TimerHandle_t xTimer) {
                 tempomat_on = 0;
                 desired_speed = 999;
                 update_display(desired_speed);
-                printf("Tempomat resetovan zbog pritiska papučica (LED bar)\n");
+                printf("Tempomat resetovan zbog pritiska papucica (LED bar)\n");
                 send_message_COM2("Tempomat OFF.\n");
             }
         }
@@ -286,7 +302,7 @@ void SerialReceive_Task(void* pvParameters) {
                     uint8_t tmpc;
                     get_serial_character(COM_CH_0, &tmpc);
                 }
-            }            
+            }
         } // end else normal char
     } // end WHILE
 }
@@ -396,11 +412,12 @@ void Display_Task(void* pvParameters) {
 
 // OPTIONAL: Serial send task (neobavezno)
 void SerialSend_Task(void* pvParameters) {
-    const char poruka[] = "READY";
+    const char poruka[] = "READY\n";
     uint8_t i = 0;
     while (1) {
         send_serial_character(COM_CH_2, poruka[i++]);
-        if (i >= sizeof(poruka) - 1) i = 0;
+        if (i >= sizeof(poruka) - 1)
+            i = 0;
         xSemaphoreTake(TBE_BinarySemaphore, portMAX_DELAY);
         vTaskDelay(pdMS_TO_TICKS(1000));
     }
@@ -415,7 +432,7 @@ void main_demo(void) {
     init_serial_downlink(COM_CH_1);
     init_serial_uplink(COM_CH_2);
     init_serial_downlink(COM_CH_2);
-    
+
     // inicijalizacija simulatora
     init_7seg_comm();
     init_LED_comm();
