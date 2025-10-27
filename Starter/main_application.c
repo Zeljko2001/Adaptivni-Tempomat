@@ -253,6 +253,9 @@ void SerialReceive_Task(void* pvParameters) {
                         send_message_COM2("Invalid speed: %d\n");
                     }
                 }
+                else {                   
+                    send_message_COM2("Invalid command\n");
+                }
                 // resetujemo buffer i indeks da bismo bili spremni za sledeću poruku
                 idx = 0;
                 memset(buffer, 0, sizeof(buffer));
@@ -273,9 +276,8 @@ void SerialReceive_Task(void* pvParameters) {
         }
         else {
             // normalan znak (nije delimiter) -> dodaj u buffer ako ima mesta
-            if (idx < (int)sizeof(buffer) - 2) { // ostavimo mesto za terminator i eventualno 
-                buffer[idx++] = (char)cc;//
-                buffer[idx] = '\0';
+			if (idx < (int)sizeof(buffer) - 1) { // ostavi mesto za null terminator
+				buffer[idx++] = (char)cc;// dodaj znak u buffer             
             }
             else {
                 // buffer overflow – resetuj da se ne "zalepi"
