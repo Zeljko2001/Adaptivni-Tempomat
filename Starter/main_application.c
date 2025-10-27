@@ -59,41 +59,28 @@ static volatile uint8_t alarm_active = 0;
 
 // ------------------- ISR FUNKCIJE -------------------
 static uint32_t prvProcessRXCInterrupt(void) {
-    BaseType_t xHigherPTW = pdFALSE;
-    if (get_RXC_status(COM_CH_0)) xSemaphoreGiveFromISR(RXC_BinarySemaphore_0, &xHigherPTW);
-    if (get_RXC_status(COM_CH_1)) xSemaphoreGiveFromISR(RXC_BinarySemaphore_1, &xHigherPTW);
-    if (get_RXC_status(COM_CH_2)) xSemaphoreGiveFromISR(RXC_BinarySemaphore_2, &xHigherPTW);
+    BaseType_t xHigherPTW = pdFALSE; 
+	if (get_RXC_status(COM_CH_0)) // provera koji kanal je izazvao prekid
+		xSemaphoreGiveFromISR(RXC_BinarySemaphore_0, &xHigherPTW); // signaliziramo tasku da je stigao podatak na COM_CH_0
+    if (get_RXC_status(COM_CH_1)) 
+        xSemaphoreGiveFromISR(RXC_BinarySemaphore_1, &xHigherPTW);
+    if (get_RXC_status(COM_CH_2)) 
+        xSemaphoreGiveFromISR(RXC_BinarySemaphore_2, &xHigherPTW);
     portYIELD_FROM_ISR(xHigherPTW);
-
-    if (get_RXC_status(0) != 0) {
-        if (xSemaphoreGiveFromISR(RXC_BinarySemaphore_0, &xHigherPTW) != pdPASS) {
-            printf("Error RXC_SEM0_GIVE\n");
-        }
-
-        if (xSemaphoreGiveFromISR(RXC_BinarySemaphore_1, &xHigherPTW) != pdPASS) {
-            printf("Error RXC_SEM0_GIVE\n");
-        }
-
-        if (xSemaphoreGiveFromISR(RXC_BinarySemaphore_2, &xHigherPTW) != pdPASS) {
-            printf("Error RXC_SEM0_GIVE\n");
-        }
-    }
     return 0;
 }
 
 static uint32_t prvProcessTBEInterrupt(void) {
-    BaseType_t xHigherPTW = pdFALSE;
-    xSemaphoreGiveFromISR(TBE_BinarySemaphore, &xHigherPTW);
-
-
-    portYIELD_FROM_ISR(xHigherPTW);
+	BaseType_t xHigherPTW = pdFALSE; // prekid je izazvan praznjenjem TBE bafera
+	xSemaphoreGiveFromISR(TBE_BinarySemaphore, &xHigherPTW);// signaliziramo da je TBE prazan
+    portYIELD_FROM_ISR(xHigherPTW);//
     return 0;
 }
 
 static uint32_t OnLED_ChangeInterrupt(void)
 {
-    BaseType_t xHigherPTW = pdFALSE;
-    xSemaphoreGiveFromISR(LED_INT_BinarySemaphore, &xHigherPTW);
+	BaseType_t xHigherPTW = pdFALSE;// prekid je izazvan promenom na LED baru
+	xSemaphoreGiveFromISR(LED_INT_BinarySemaphore, &xHigherPTW);// signaliziramo tasku da je do promena na LED baru
     portYIELD_FROM_ISR(xHigherPTW);
     return 0;
 }
@@ -108,7 +95,7 @@ void send_message_COM2(const char* msg) {
 
 // ------------------- HELPERS -------------------
 static void update_display(uint16_t value) {// azurira prikaz na 7segmentnom displeju
-    uint16_t desired = tempomat_on ? desired_speed : 999;
+	uint16_t desired = tempomat_on ? desired_speed : 999;// ako je tempomat iskljucen prikazi 999 kao zeljenu brzinu
     uint16_t current = current_speed;
 
     if (desired > 999) desired = 999;
@@ -336,7 +323,7 @@ void Sensor_Task(void* pvParameters) {// prima podatke sa senzora udaljenosti na
                             }
                         }
                         if (dist >= 0) { // provera granica distance
-                            latest_distance_cm = (uint16_t)dist;
+                            xQueueSend(Sensor_Queue, &dist, portMAX_DELAY);
                             printf("Distance updated to %d cm\n", dist);
                         }
                         else {
@@ -425,8 +412,8 @@ void SerialSend_Task(void* pvParameters) {// šalje "READY\n" na COM_CH_2 svakih
 // ------------------- MAIN DEMO -------------------
 void main_demo(void) {
     // inicijalizacija kanala
-    init_serial_uplink(COM_CH_0);
-    init_serial_downlink(COM_CH_0);
+	init_serial_uplink(COM_CH_0);// inicijalizacija kanala za prijem podataka sa PC-a
+	init_serial_downlink(COM_CH_0);// inicijalizacija kanala za slanje podataka ka PC-u
     init_serial_uplink(COM_CH_1);
     init_serial_downlink(COM_CH_1);
     init_serial_uplink(COM_CH_2);
